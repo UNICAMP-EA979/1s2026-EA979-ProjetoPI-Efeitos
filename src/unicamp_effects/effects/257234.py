@@ -1,4 +1,4 @@
-from PIL.Image import Image
+from PIL import Image
 import numpy as np
 import scipy.ndimage as ndimage
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
@@ -17,11 +17,11 @@ def mag_sobel(img: np.ndarray) -> np.ndarray: # (Retirada da atividade PI04)
 
 
 def halftoning_effect(img: np.ndarray, block_size: int = 3) -> np.ndarray:
-    h, w, _ = img.shape
+    h, w = img.shape[:2]
     y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
     pattern = (np.sin(x * np.pi / block_size) * np.sin(y * np.pi / block_size) + 1.0) / 2.0
     
-    pattern = pattern.reshape(h, w, 1)
+    pattern = pattern.reshape(h, w)
     
     return np.clip(img * (0.5 + 0.5 * pattern), 0, 1)
 
