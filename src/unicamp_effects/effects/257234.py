@@ -21,8 +21,9 @@ def halftoning_effect(img: np.ndarray, block_size: int = 3) -> np.ndarray:
     y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
     pattern = (np.sin(x * np.pi / block_size) * np.sin(y * np.pi / block_size) + 1.0) / 2.0
     
-    pattern = pattern.reshape(h, w)
-    
+    if img.ndim == 3:
+        pattern = pattern.reshape(h, w, 1)
+        
     return np.clip(img * (0.5 + 0.5 * pattern), 0, 1)
 
 def rgb_to_grayscale(rgb: np.ndarray) -> np.ndarray:
