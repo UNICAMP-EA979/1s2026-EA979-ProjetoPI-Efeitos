@@ -1,5 +1,7 @@
+from PIL.Image import Image
 import numpy as np
 import scipy.ndimage as ndimage
+from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
 
 from unicamp_effects.registry import register
 
@@ -141,3 +143,47 @@ def industrial_effect(image: np.ndarray) -> np.ndarray:
     out_img[split_y:, split_x:] = pixelated_img[split_y:, split_x:]
 
     return np.clip(out_img * 255.0, 0, 255).astype(np.uint8)
+
+
+def vignette_effect(image: np.ndarray, strength: float = 0.5) -> np.ndarray:
+    h, w, _ = image.shape
+    x, y = np.meshgrid(np.arange(w), np.arange(h))
+    center_y, center_x = h / 2, w / 2@register(prefix="257234")
+    distance_from_center = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+    max_distance = np.sqrt(center_x ** 2 + center_y ** 2)
+    
+    vignette_mask = 1 - (distance_from_center / max_distance) * strength
+    vignette_mask = np.clip(vignette_mask, 0, 1)
+    
+    vignette_mask = vignette_mask.reshape(h, w, 1) 
+    
+    return np.clip(image * vignette_mask, 0, 255).astype(np.uint8)
+
+
+def alter_saturation(image: np.ndarray, saturation_factor: float) -> np.ndarray:
+    hsv = rgb_to_hsv(image / 255.0)
+    hsv[..., 1] *= saturation_factor
+    hsv[..., 1] = np.clip(hsv[..., 1], 0, 1)
+    
+    return (hsv_to_rgb(hsv) * 255).astype(np.uint8)
+
+def color_quantization_effect(image: np.ndarray, num_colors: int = 8) -> np.ndarray:
+    img = Image.fromarray(image)
+    quantized_img = img.quantize(colors=num_colors, method=Image.ADAPTIVE)
+    quantized_array = np.array(quantized_img.convert('RGB'))
+
+    return np.clip(quantized_array, 0, 255).astype(np.uint8)
+
+def noise_effect(image: np.ndarray, noise_level: float = 0.05) -> np.ndarray:
+    noise = np.random.normal(0, noise_level * 255, image.shape).astype(np.float32)
+    noisy_image = image.astype(np.float32) + noise
+    return np.clip(noisy_image, 0, 255).astype(np.uint8)
+
+@register(prefix="257234")
+def gloomy_effect(image: np.ndarray) -> np.ndarray:
+    img = color_quantization_effect(image, num_colors=4)
+    img = noise_effect(img, noise_level=0.25)
+    img = alter_saturation(img, saturation_factor=0.5)
+    img = vignette_effect(img, strength=1.15)
+    
+    return img
