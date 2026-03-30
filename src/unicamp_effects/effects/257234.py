@@ -13,6 +13,12 @@ def mag_sobel(img: np.ndarray) -> np.ndarray: # (Retirada da atividade PI04)
     img_v = ndimage.convolve(img, Sv)
     return np.sqrt(np.power(img_h, 2) + np.power(img_v, 2))
 
+def create_halftone_pattern(shape, block_size):
+    h, w = shape[:2]
+    y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+    pattern = (np.sin(x * np.pi / block_size) * np.sin(y * np.pi / block_size) + 1.0) / 2.0
+    return pattern
+
 def halftoning_effect(img: np.ndarray, block_size: int = 3) -> np.ndarray:
     """Aplica um efeito suave de halftoning criando uma malha de pontos.
     
@@ -23,10 +29,7 @@ def halftoning_effect(img: np.ndarray, block_size: int = 3) -> np.ndarray:
     Returns:
         np.ndarray: Imagem com o efeito de halftoning aplicado. Imagem resultante estará no intervalo [0, 1].
     """
-        
-    h, w = img.shape[:2]
-    y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
-    pattern = (np.sin(x * np.pi / block_size) * np.sin(y * np.pi / block_size) + 1.0) / 2.0
+    pattern = create_halftone_pattern(img.shape, block_size)
     
     # Expandir para ter canais como a imagem
     if img.ndim == 3:
@@ -46,9 +49,27 @@ def rgb_to_grayscale(rgb: np.ndarray) -> np.ndarray:
     """
     return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
 
+def pixelate_effect(img: np.ndarray, block_size: int = 50) -> np.ndarray:
+    out = np.copy(img)
+    h, w = img.shape[:2]
+    
+    h_adj = (h // block_size) * block_size
+    w_adj = (w // block_size) * block_size
+    
+    if h_adj > 0 and w_adj > 0:
+        if img.ndim == 3:
+            blocks = img[:h_adj, :w_adj].reshape(h_adj // block_size, block_size, w_adj // block_size, block_size, img.shape[2])
+        else:
+            blocks = img[:h_adj, :w_adj].reshape(h_adj // block_size, block_size, w_adj // block_size, block_size)
+        out[:h_adj, :w_adj] = np.repeat(np.repeat(blocks.mean(axis=(1, 3)), block_size, axis=0), block_size, axis=1)
+            
+    return out
+
 @register(prefix="257234")
 def blueprint_effect(img: np.ndarray) -> np.ndarray:
-    gray = rgb_to_grayscale(img) if (img.ndim == 3 and img.shape[-1] >= 3) else img.copy()
+    img_float = img.astype(np.float64) / 255.0
+        
+    gray = rgb_to_grayscale(img_float)
 
     # Detecção de borda
     edges = mag_sobel(gray)
@@ -68,4 +89,55 @@ def blueprint_effect(img: np.ndarray) -> np.ndarray:
     # Aplica textura/halftoning simulando papel impresso
     blueprint_textured = halftoning_effect(blueprint, block_size=15)
     
-    return np.clip(blueprint_textured, 0, 1)
+    out_img = np.clip(blueprint_textured * 255.0, 0, 255).astype(np.uint8)
+    
+    return out_img
+
+
+def industrial_effect(image: np.ndarray) -> np.ndarray:
+    img_float = image.astype(np.float64) / 255.0
+        
+    gray = rgb_to_grayscale(img_float) if img_float.ndim == 3 else img_float.copy()
+    h, w = gray.shape
+    
+    # Mapeamento de Cores (paleta industrial)
+    black = np.array([15, 15, 20]) / 255.0
+    rust = np.array([204, 85, 0]) / 255.0
+    cream = np.array([235, 235, 230]) / 255.0
+    
+    textured_dark = halftoning_effect(gray, block_size=9)
+    textured_mid = halftoning_effect(gray, block_size=15)
+
+    tritone = np.zeros((*gray.shape, 3))
+    
+    # Aplicar as cores com base no limiar das suas respectivas texturas geradas
+    mask_dark = textured_dark < 0.35
+    mask_mid = (textured_mid >= 0.35) & (textured_mid < 0.65)
+    mask_light = gray >= 0.65 # Áreas claras sem halftoning
+    
+    tritone[mask_dark] = black
+    tritone[mask_mid] = rust
+    tritone[mask_light] = cream
+            
+    # Detecção de Borda (Neon Lines)
+    edges = mag_sobel(gray)
+    edges = edges /  np.max(edges)
+        
+    edges = np.where(edges > 0.2, edges, 0.0)
+    edges = ndimage.maximum_filter(edges, size=3) # Dilatação para estilo neon
+
+    cyan_neon = np.array([0, 255, 230]) / 255.0
+    edges_expanded = edges[..., np.newaxis]
+    
+    # Mesclar a camada base tritone com as linhas neon por cima
+    out_img = tritone * (1.0 - edges_expanded) + cyan_neon * edges_expanded
+    
+    # Pixelização Seletiva no quadrante inferior direito
+    pixelated_img = pixelate_effect(out_img, block_size=50)
+    
+    # Aplicar apenas no quadrante inferior direito
+    split_x = int(w * 0.75) 
+    split_y = int(h * 0.65) 
+    out_img[split_y:, split_x:] = pixelated_img[split_y:, split_x:]
+
+    return np.clip(out_img * 255.0, 0, 255).astype(np.uint8)
