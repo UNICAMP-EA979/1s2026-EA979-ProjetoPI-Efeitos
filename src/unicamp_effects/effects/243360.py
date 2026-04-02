@@ -3,132 +3,211 @@ import cv2
 
 
 from unicamp_effects.registry import register
-
+from scipy.ndimage import map_coordinates
+from scipy.ndimage import affine_transform
 
 @register(prefix="243360")
 def edge_detection(img: np.ndarray) -> np.ndarray:
-    # Carregar a imagem e Conversão para Tons de Cinza
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Tons de Cinza (Pesos da norma ITU-R 601-2)
+    # Assume que a imagem está em formato RGB (NumPy array)
+    if len(img.shape) == 3:
+        gray = 0.299 * img[:,:,0] + 0.587 * img[:,:,1] + 0.114 * img[:,:,2]
+    else:
+        gray = img
 
-    # Redução de Ruído (Filtro Gaussiano)
-    # ksize=(5, 5) é comum, mas para rachaduras finas, (3, 3) pode preservar mais detalhes
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Filtro Gaussiano (Kernel 5x5, sigma=1.0)
+    def gaussian_kernel(size, sigma=1.0):
+        size = int(size) // 2
+        x, y = np.mgrid[-size:size+1, -size:size+1]
+        normal = 1 / (2.0 * np.pi * sigma**2)
+        g =  np.exp(-((x**2 + y**2) / (2.0 * sigma**2))) * normal
+        return g
 
-    # Algoritmo de Canny
-    # O OpenCV agrupa o cálculo do Gradiente, Supressão e Histérese em uma função.
-    # threshold1: Limiar inferior (Hysteresis)
-    # threshold2: Limiar superior (Bordas fortes)
-    edges = cv2.Canny(blurred, threshold1=50, threshold2=150)
+    kernel_blur = gaussian_kernel(5, sigma=1.0)
+    blurred = convolve(gray, kernel_blur)
 
-    return edges
+    # Gradiente (Sobel)
+    Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], np.float32)
+    Ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], np.float32)
+    
+    Ix = convolve(blurred, Kx)
+    Iy = convolve(blurred, Ky)
+    
+    # Magnitude e Direção do Gradiente
+    G = np.hypot(Ix, Iy)
+    G = G / G.max() * 255
+    theta = np.arctan2(Iy, Ix)
+
+    # Supressão de Não-Máximos (Simplificado)
+    # Aqui removemos pixels que não são o pico local na direção do gradiente
+    M, N = G.shape
+    Z = np.zeros((M, N), dtype=np.int32)
+    angle = theta * 180. / np.pi
+    angle[angle < 0] += 180
+
+    for i in range(1, M-1):
+        for j in range(1, N-1):
+            q, r = 255, 255
+            # Direção 0 (Horizontal)
+            if (0 <= angle[i,j] < 22.5) or (157.5 <= angle[i,j] <= 180):
+                q, r = G[i, j+1], G[i, j-1]
+            # Direção 45 (Diagonal)
+            elif (22.5 <= angle[i,j] < 67.5):
+                q, r = G[i+1, j-1], G[i-1, j+1]
+            # Direção 90 (Vertical)
+            elif (67.5 <= angle[i,j] < 112.5):
+                q, r = G[i+1, j], G[i-1, j]
+            # Direção 135 (Diagonal)
+            elif (112.5 <= angle[i,j] < 157.5):
+                q, r = G[i-1, j-1], G[i+1, j+1]
+
+            if (G[i,j] >= q) and (G[i,j] >= r):
+                Z[i,j] = G[i,j]
+            else:
+                Z[i,j] = 0
+
+    # Histérese (Thresholding)
+    low_threshold = 50
+    high_threshold = 150
+    
+    res = np.zeros((M,N), dtype=np.int32)
+    strong_i, strong_j = np.where(Z >= high_threshold)
+    weak_i, weak_j = np.where((Z <= high_threshold) & (Z >= low_threshold))
+    
+    res[strong_i, strong_j] = 255
+    res[weak_i, weak_j] = 50 # Marcado como fraco
+    
+    # Nota: O Canny real conecta pixels fracos se estiverem perto de fortes.
+    # Para simplicidade, este código retorna o mapa de intensidades filtrado.
+    
+    return res.astype(np.uint8)
 
 # --- SEPARAÇÃO E DISTORÇÃO GEOMÉTRICA ---
-def distort_channel(w, h, radial_mask, center_x, center_y, channel, scale_factor):
-    # Criamos o mapa de coordenadas original
-    map_x, map_y = np.meshgrid(np.arange(w), np.arange(h))
+def distort_channel_manual(channel, radial_mask, center_x, center_y, scale_factor):
+    h, w = channel.shape
+    # Criamos o mapa de coordenadas original (y, x) para o scipy
+    # O scipy espera as coordenadas de destino organizadas por eixos
+    y_coords, x_coords = np.indices((h, w), dtype=np.float32)
         
-    # O deslocamento é proporcional à máscara (0 no centro, máx na borda)
-    # scale_factor > 1 expande (Vermelho), < 1 contrai (Azul)
+    # Fator de deslocamento baseado na máscara radial
     offset_factor = 1 + (scale_factor - 1) * radial_mask
         
-    # Aplicamos a distorção radial a partir do centro
-    new_map_x = ((map_x - center_x) * offset_factor + center_x).astype(np.float32)
-    new_map_y = ((map_y - center_y) * offset_factor + center_y).astype(np.float32)
-        
-    # Remapeia o canal individualmente
-    return cv2.remap(channel, new_map_x, new_map_y, cv2.INTER_LINEAR)
+    # Calculamos para onde cada pixel "deve olhar" na imagem original
+    # (Invertemos a lógica da escala para o remapeamento)
+    map_x = (x_coords - center_x) * offset_factor + center_x
+    map_y = (y_coords - center_y) * offset_factor + center_y
+    
+    # Organizamos as coordenadas para o formato exigido pelo map_coordinates: 
+    # uma matriz 2xN onde a primeira linha é Y e a segunda é X
+    coords = np.array([map_y.ravel(), map_x.ravel()])
+    
+    # Realiza a interpolação bilinear (order=1)
+    # cval=0 define a cor dos pixels que "saírem" da borda da imagem
+    distorted = map_coordinates(channel, coords, order=1, mode='constant', cval=0)
+    
+    return distorted.reshape(h, w)
 
 @register(prefix="243360")
 def chromatic_aberration(img: np.ndarray) -> np.ndarray:
     intensity = 0.005
-    if img is None: return print("Erro ao carregar imagem.")
+    if img is None: return None
     
-    h, w = img.shape[:2]
-    center_x, center_y = w / 2, h / 2
+    h, w, c = img.shape
+    center_x, center_y = w / 2.0, h / 2.0
 
     # MÁSCARA DE INTENSIDADE RADIAL
-    # Criamos uma matriz de distâncias do centro para servir de mapa de influência
     y, x = np.indices((h, w))
     distance_from_center = np.sqrt((x - center_x)**2 + (y - center_y)**2)
     max_distance = np.sqrt(center_x**2 + center_y**2)
-    
-    # Normaliza a máscara (0 no centro, 1 nas bordas)
     radial_mask = distance_from_center / max_distance
     
-    # Separar canais (BGR no OpenCV)
-    b_channel, g_channel, r_channel = cv2.split(img)
+    # Separar canais (Assume formato HWC)
+    # Se a imagem veio do OpenCV, a ordem é B, G, R
+    b_channel = img[:, :, 0]
+    g_channel = img[:, :, 1]
+    r_channel = img[:, :, 2]
 
-    # Aplicar as distorções solicitadas
-    # Vermelho: escala positiva (expande)
-    r_distorted = distort_channel(w, h, radial_mask, center_x, center_y, r_channel, 1.0 + intensity)
-    # Azul: escala negativa (contrai)
-    b_distorted = distort_channel(w, h, radial_mask, center_x, center_y, b_channel, 1.0 - intensity)
-    # Verde: permanece inalterado
+    # Aplicar as distorções
+    # R: escala positiva (expande)
+    r_distorted = distort_channel_manual(r_channel, radial_mask, center_x, center_y, 1.0 + intensity)
+    # B: escala negativa (contrai)
+    b_distorted = distort_channel_manual(b_channel, radial_mask, center_x, center_y, 1.0 - intensity)
+    # G: permanece inalterado
     g_unchanged = g_channel
 
     # --- RECOMPOR ---
-    result = cv2.merge([b_distorted, g_unchanged, r_distorted])
+    # Stack dos canais de volta para o formato original
+    result = np.stack([b_distorted, g_unchanged, r_distorted], axis=2).astype(np.uint8)
 
-    # --- SUTILIZAÇÃO (OPCIONAL) ---
-    # Para sutilizar, podemos fazer um blend com a imagem original
-    final_output = cv2.addWeighted(img, 0.3, result, 0.7, 0)
+    # --- SUTILIZAÇÃO (Blend manual) ---
+    # final = img * 0.3 + result * 0.7
+    final_output = (img * 0.3 + result * 0.7).astype(np.uint8)
 
     return final_output
 
 @register(prefix="243360")
 def radial_blur(img: np.ndarray) -> np.ndarray:
-    intensity=0.10
-    samples=10
-    # --- CARREGAR E ISOLAR ---
-    if img is None: return print("Erro ao carregar imagem.")
+    intensity = 0.10
+    samples = 10
     
-    h, w = img.shape[:2]
-    center = (w / 2, h / 2) # Ponto central onde as linhas convergem
-
-    # Usaremos uma imagem em float32 para acumular as amostras com precisão
-    acc_img = np.zeros_like(img, dtype=np.float32)
-
-    # --- AMOSTRAGEM RADIAL (USANDO TRANSFORMAÇÃO AFIM ITERATIVA) ---
-    # Em vez de calcular pixel por pixel, aplicamos pequenas escalas e 
-    # acumulamos o resultado. Isso simula a coleta de amostras ao longo da linha radial.
+    if img is None:
+        return None
     
+    h, w, c = img.shape
+    center_y, center_x = h / 2.0, w / 2.0
+    
+    # Imagem de acumulação em float32 para evitar estouro de bits (overflow)
+    acc_img = np.zeros(img.shape, dtype=np.float32)
+
+    # --- SIMULAÇÃO DE ZOOM RADIAL ---
     for i in range(samples):
-        # A escala é progressiva: 1.0 (original) até 1.0 + intensity
+        # Escala progressiva: 1.0 (original) até 1.0 + intensity
         scale = 1.0 + (i * intensity / (samples - 1))
         
-        # Cria a matriz de transformação para escala centrada
-        M = cv2.getRotationMatrix2D(center, 0, scale)
+        # No scipy.ndimage.affine_transform, a matriz define como mapear 
+        # as coordenadas de SAÍDA para a ENTRADA. 
+        # Para um "zoom in" (escala > 1), a matriz deve ser a inversa (1/scale).
+        inv_scale = 1.0 / scale
         
-        # Aplica a transformação de escala
-        warped_sample = cv2.warpAffine(img, M, (w, h), borderMode=cv2.BORDER_REPLICATE)
+        # Matriz de transformação afim para escala centrada:
+        # 1. Transladar o centro para a origem (0,0)
+        # 2. Escalar
+        # 3. Transladar de volta para o centro original
+        # A fórmula simplificada para o deslocamento (offset) é:
+        offset = [
+            center_y * (1 - inv_scale),
+            center_x * (1 - inv_scale)
+        ]
         
-        # Acumula a amostra na imagem de ponto flutuante
-        acc_img += warped_sample.astype(np.float32)
+        # Aplicamos a transformação em cada canal de cor separadamente
+        warped_sample = np.zeros_like(img, dtype=np.float32)
+        for channel in range(c):
+            warped_sample[:, :, channel] = affine_transform(
+                img[:, :, channel],
+                matrix=np.array([inv_scale, inv_scale]), # Escala nos eixos Y e X
+                offset=offset,
+                order=1,              # Interpolação bilinear (equivalente ao OpenCV)
+                mode='nearest'        # Equivalente ao BORDER_REPLICATE
+            )
+        
+        acc_img += warped_sample
 
-    # Calcula a média das amostras
-    blurred_layer = (acc_img / samples).astype(np.uint8)
+    # Média das amostras
+    blurred_layer = acc_img / samples
 
-    # --- INTENSIDADE RADIAL, RECOMPOSIÇÃO E AJUSTE SUTIL ---
-    # Criamos uma máscara radial para garantir o centro nítido e bordas desfocadas
+    # --- MÁSCARA RADIAL E BLENDING ---
     y, x = np.indices((h, w))
-    dist_from_center = np.sqrt((x - center[0])**2 + (y - center[1])**2)
-    max_dist = np.sqrt(center[0]**2 + center[1]**2)
+    dist_from_center = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+    max_dist = np.sqrt(center_x**2 + center_y**2)
     
-    # Máscara radial: 1.0 no centro (original), 0.0 nas bordas (desfocado)
-    radial_mask = 1.0 - (dist_from_center / max_dist)
+    # Máscara: 1.0 no centro (nítido), 0.0 na borda (desfocado)
+    # Expandimos a dimensão para permitir o broadcast com os 3 canais (H, W, 1)
+    radial_mask = (1.0 - (dist_from_center / max_dist))[:, :, np.newaxis]
     
-    # Garante que a máscara tem 3 canais para o blend de cores
-    radial_mask_3ch = cv2.merge([radial_mask, radial_mask, radial_mask])
-    
-    # Converte para float para multiplicação
-    img_f = img.astype(np.float32)
-    blurred_f = blurred_layer.astype(np.float32)
+    # Clip para garantir que a máscara fique entre 0 e 1
+    radial_mask = np.clip(radial_mask, 0, 1)
 
-    # Mesclagem (Blending):
-    # Resultado = (Imagem Original * Peso do Centro) + (Camada Desfocada * Peso da Borda)
-    final_output_f = (img_f * radial_mask_3ch) + (blurred_f * (1.0 - radial_mask_3ch))
+    # Mesclagem: Original * máscara + Blur * (1 - máscara)
+    final_output_f = (img.astype(np.float32) * radial_mask) + (blurred_layer * (1.0 - radial_mask))
 
-    # Converte de volta para uint8
-    final_output = final_output_f.astype(np.uint8)
-
-    return final_output
+    return np.clip(final_output_f, 0, 255).astype(np.uint8)
