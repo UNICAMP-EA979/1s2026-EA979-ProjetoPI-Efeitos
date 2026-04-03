@@ -1,10 +1,64 @@
 import cv2
 import numpy as np
 from PIL import Image
+from scipy import ndimage as ndi
 
 from unicamp_effects.registry import register
 
-# --- Funções auxiliares para aberração cromática
+# --- Funções auxiliares para detecção de borda ---
+def _mascara_tijolos(img: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+
+    h = hsv[:, :, 0]
+    s = hsv[:, :, 1]
+    v = hsv[:, :, 2]
+
+    h_min, h_max = 4, 20
+    s_min, s_max = 80, 255
+
+    # mascara binaria 
+    base_mask = np.zeros(h.shape, dtype=np.uint8)
+    base_mask[
+        (h >= h_min) & (h <= h_max) &
+        (s >= s_min) & (s <= s_max) 
+        ] = 255
+
+    opened = cv2.morphologyEx(
+        base_mask,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)),
+    )
+    cleaned = cv2.morphologyEx(
+        opened,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10)),
+    )
+
+    return cleaned
+
+def _magSobel(img: np.ndarray) -> np.ndarray:
+    Sv = np.array([[1,0,-1],[2,0,-2],[1,0,-1]])
+    Sv = Sv.reshape(3, 3)
+    
+    Sh = np.array([[1,2,1],[0,0,0],[-1,-2,-1]])
+    Sh = Sh.reshape(3, 3)
+
+    # Kernel do filtro gaussiano
+    kernel_gaussiano = np.array([1, 2, 1, 2, 4, 2, 1, 2, 1], dtype=float)
+    kernel_gaussiano = kernel_gaussiano * (1/16)
+    kernel_gaussiano = kernel_gaussiano.reshape((3, 3))
+
+    img_gaussian = ndi.convolve(img, kernel_gaussiano, mode="constant",cval=0.0, output=float)
+
+    imgv = ndi.convolve(img_gaussian, Sv)
+    imgh = ndi.convolve(img_gaussian, Sh)
+
+    img_filtered = np.sqrt(np.pow(imgv, 2) + np.pow(imgh, 2))
+    img_filtered = np.clip(img_filtered, 0, 255).astype(np.uint8)
+
+    return(img_filtered)
+
+# --- Funções auxiliares para aberração cromática ---
 def _shift_channel(channel: np.ndarray, shift_x: int) -> np.ndarray:
     h, w = channel.shape
 
@@ -35,11 +89,25 @@ def _mascara_roxo(img: np.ndarray) -> np.ndarray:
         (h >= h_min) & (h <= h_max) &
         (s >= s_min) & (s <= s_max)] = 255
 
-    # fundo em grayscale
-    # gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # background = np.repeat(gray[:, :, np.newaxis], 3, axis=2)
-
     return mask
+
+# --- Efeitos implementados ---
+@register(prefix="245760")
+def deteccao_borda(img: np.ndarray) -> np.ndarray:
+
+    # Imagem segmentada com mascara
+    mask = _mascara_tijolos(img)
+    img1 = np.zeros_like(img)
+    img1[mask == 255] = img[mask == 255]
+
+    img2 = _magSobel(cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY))
+    img2 = np.repeat(img2[:, :, np.newaxis], 3, axis=2)
+
+    result = np.zeros_like(img)
+    result[mask == 0] = img[mask == 0]
+    result[mask == 255] = img2[mask == 255]
+
+    return result.astype(np.uint8)
 
 @register(prefix="245760")
 def aberracao_cromatica(img: np.ndarray) -> np.ndarray:
