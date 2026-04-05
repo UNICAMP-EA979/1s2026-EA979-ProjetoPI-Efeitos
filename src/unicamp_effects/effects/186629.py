@@ -52,7 +52,7 @@ def color_splash(img: np.ndarray) -> np.ndarray:
     center_y, center_x = int(H * 0.6), W // 2 
     
     # Eixos da elipse de foco (raios)
-    a, b = W // 2.5, H // 2.5 
+    a, b = W // 2.5, H // 4
     
     # Calcula a distância de cada pixel para o centro da elipse
     dist_sq = ((X - center_x) / a)**2 + ((Y - center_y) / b)**2
