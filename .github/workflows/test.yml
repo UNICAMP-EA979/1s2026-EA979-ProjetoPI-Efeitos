@@ -27,4 +27,3 @@ jobs:
             - name: Tests
               run: pytest
               shell: bash
-              continue-on-error: ${{ github.ref == 'refs/heads/main' }}
