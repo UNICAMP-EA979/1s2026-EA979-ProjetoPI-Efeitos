@@ -12,7 +12,7 @@ def test_photos():
     paths = get_all_imgs_in_dir(photo_dir)
 
     assert len(paths) >= 15
-    prefix = os.path.basename(os.paths[0].normpath(path)).split(" ")[0]
+    prefix = os.path.basename(os.path.normpath(paths[0])).split(" ")[0]
     for path in paths:
         filename = os.path.basename(os.path.normpath(path))
         assert filename.split("_")[0] == prefix
