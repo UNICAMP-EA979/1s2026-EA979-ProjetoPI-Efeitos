@@ -59,4 +59,4 @@ def quantizacao(img: np.ndarray) -> np.ndarray:
     # para reduzir a quantidade de cores
     out = (amostragem // level) * level
 
-    return out.astype(np.uint8)
+    return out
