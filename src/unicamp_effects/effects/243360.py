@@ -9,6 +9,7 @@ from scipy.ndimage import affine_transform
 def edge_detection(img: np.ndarray) -> np.ndarray:
     # Tons de Cinza (Pesos da norma ITU-R 601-2)
     # Assume que a imagem está em formato RGB (NumPy array)
+    size_img = len(img)
     if len(img.shape) == 3:
         gray = 0.299 * img[:,:,0] + 0.587 * img[:,:,1] + 0.114 * img[:,:,2]
     else:
@@ -23,14 +24,14 @@ def edge_detection(img: np.ndarray) -> np.ndarray:
         return g
 
     kernel_blur = gaussian_kernel(5, sigma=1.0)
-    blurred = scp.signal.convolve(gray, kernel_blur)
+    blurred = scp.signal.convolve(gray, kernel_blur, mode='same')
 
     # Gradiente (Sobel)
     Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], np.float32)
     Ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], np.float32)
     
-    Ix = scp.signal.convolve(blurred, Kx)
-    Iy = scp.signal.convolve(blurred, Ky)
+    Ix = scp.signal.convolve(blurred, Kx, mode='same')
+    Iy = scp.signal.convolve(blurred, Ky, mode ='same')
     
     # Magnitude e Direção do Gradiente
     G = np.hypot(Ix, Iy)
@@ -78,9 +79,8 @@ def edge_detection(img: np.ndarray) -> np.ndarray:
     
     # Nota: O Canny real conecta pixels fracos se estiverem perto de fortes.
     # Para simplicidade, este código retorna o mapa de intensidades filtrado.
-    
-    return res.astype(np.uint8)
-
+    res_rgb = np.stack([res]*3, axis=-1)
+    return res_rgb.astype(np.uint8)
 # --- SEPARAÇÃO E DISTORÇÃO GEOMÉTRICA ---
 def distort_channel_manual(channel, radial_mask, center_x, center_y, scale_factor):
     h, w = channel.shape
