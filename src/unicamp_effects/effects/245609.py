@@ -44,7 +44,7 @@ def onda_de_calor(img: np.ndarray) -> np.ndarray:
     out[:, :, 2] = img_float[:, :, 2]
 
     #o efeito blur será feito utilizando o filtro da média
-    k = 8 #tamanho do kernel
+    k = 7 #tamanho do kernel
     pad = k // 2 #pixels da borda
     
     #tratamento de borda: método extend
