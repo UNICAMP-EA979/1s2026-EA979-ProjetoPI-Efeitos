@@ -49,6 +49,7 @@ def pixelizacao(img: np.ndarray) -> np.ndarray:
 @register(prefix="237310")
 def quantizacao(img: np.ndarray) -> np.ndarray:
     block_size = 4
+    h, w, _ = img.shape
 
     # para a quantização, a imagem é subamostrada,
     # mantendo a resolução próxima da original
@@ -59,4 +60,6 @@ def quantizacao(img: np.ndarray) -> np.ndarray:
     # para reduzir a quantidade de cores
     out = (amostragem // level) * level
 
-    return out
+    out = out[:h, :w]
+
+    return out.astype(np.uint8)
