@@ -23,18 +23,7 @@ def _mascara_tijolos(img: np.ndarray) -> np.ndarray:
         (s >= s_min) & (s <= s_max) 
         ] = 255
 
-    opened = cv2.morphologyEx(
-        base_mask,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)),
-    )
-    cleaned = cv2.morphologyEx(
-        opened,
-        cv2.MORPH_CLOSE,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10)),
-    )
-
-    return cleaned
+    return base_mask
 
 def _magSobel(img: np.ndarray) -> np.ndarray:
     Sv = np.array([[1,0,-1],[2,0,-2],[1,0,-1]])
@@ -107,7 +96,9 @@ def deteccao_borda(img: np.ndarray) -> np.ndarray:
     result[mask == 0] = img[mask == 0]
     result[mask == 255] = img2[mask == 255]
 
-    return result.astype(np.uint8)
+    result.astype(np.uint8)
+
+    return result
 
 @register(prefix="245760")
 def aberracao_cromatica(img: np.ndarray) -> np.ndarray:
@@ -131,7 +122,9 @@ def aberracao_cromatica(img: np.ndarray) -> np.ndarray:
     result[mask == 0] = background[mask == 0]
     result[mask == 255] = aberrated[mask == 255]
 
-    return result.astype(np.uint8)
+    result.astype(np.uint8)
+
+    return result
 
 @register(prefix="245760")
 def dithering(img: np.ndarray) -> np.ndarray:
@@ -152,4 +145,6 @@ def dithering(img: np.ndarray) -> np.ndarray:
 
     dithered = np.where(img_grayscale > tiled_thresholds, 255, 0).astype(np.uint8)
 
-    return np.repeat(dithered[:, :, np.newaxis], 3, axis=2)
+    dithered = np.repeat(dithered[:, :, np.newaxis], 3, axis=2)
+
+    return dithered
