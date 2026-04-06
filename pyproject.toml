@@ -11,11 +11,7 @@ classifiers = [
 ]
 requires-python = ">= 3.10"
 dynamic = ["version"]
-<<<<<<< 260382
-dependencies = ["numpy", "pillow", "opencv-python", "scipy"]
-=======
 dependencies = ["numpy", "pillow", "opencv-python", "scipy", "matplotlib"]
->>>>>>> main
 
 [project.readme]
 file = "README.md"
