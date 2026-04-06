@@ -60,14 +60,18 @@ def pixelular(img: np.ndarray) -> np.ndarray:
 
 @register(prefix="175807")
 def futuro(img: np.ndarray) -> np.ndarray:
+    h, w, canal = img.shape
+    
     # Aberração Cromática
     img_r = img[:,:,0]
     img_g = img[:,:,1]
     img_b = img[:,:,2]
-    mask_r = np.zeros((3000,4000))
-    mask_r[:,0:3940:] = img_r[:,60:4000:] # desloca 60 para esquerda
-    mask_b = np.zeros((3000,4000))
-    mask_b[:,60:4000:] = img_b[:,0:3940:] # desloca 60 para a direita
+    d_1 = w // 10
+    d_2 = w - d_1
+    mask_r = np.zeros((h,w))
+    mask_r[:,0:d_2:] = img_r[:,d_1:w:] # desloca 60 para esquerda
+    mask_b = np.zeros((h,w))
+    mask_b[:,d_1:w:] = img_b[:,0:d_2:] # desloca 60 para a direita
     img = np.concatenate([mask_r[:,:,None],
                           img_g[:,:,None],
                           mask_b[:,:,None]], axis=2)
@@ -75,24 +79,22 @@ def futuro(img: np.ndarray) -> np.ndarray:
 
     # Aplicação de vinheta
     # Criação de máscara para aplicar na imagem
-    aux = np.indices((1500,2000))
-    aux = (aux[0]**2 + aux[1]**2)
-    aux = aux.astype(float)
-    aux = (aux - aux.min()) / (aux.max() - aux.min()) * 255
-    aux = aux.astype('uint8')
-    matriz_11 = aux
-    matriz_00 = aux[::-1,::-1]
-    matriz_01 = aux[::-1,::1]
-    matriz_10 = aux[::1,::-1]
-    matriz = np.zeros((3000,4000))
-    matriz[0:1500:,0:2000:] = matriz_00
-    matriz[0:1500:,2000:4000:] = matriz_01
-    matriz[1500:3000:,0:2000:] = matriz_10
-    matriz[1500:3000:,2000:4000:] = matriz_11
-    matriz_3c = np.concatenate([matriz[:,:,None],
-                                matriz[:,:,None],
-                                matriz[:,:,None]], axis=2)
+    y, x = np.indices((h, w))
+
+    cy, cx = h//2, w//2
+
+    dist = (x - cx)**2 + (y - cy)**2
+    dist = dist.astype(float)
+
+    dist = (dist - dist.min()) / (dist.max() - dist.min()) * 255
+
+    matriz_3c = np.concatenate([dist[:,:,None],
+                                dist[:,:,None],
+                                dist[:,:,None]], axis=2)
+    
     # Aplicação do filtro com cuidado com overflow
     img_vinheta = img.astype(float) - matriz_3c
     img_vinheta = np.clip(img_vinheta, 0, 255).astype('uint8')
+
     return img_vinheta
+
