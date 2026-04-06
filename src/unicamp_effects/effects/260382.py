@@ -37,8 +37,6 @@ def difference_of_gaussians_flow_less(img: np.ndarray) -> np.ndarray:
     return difference_of_gaussians(img, 1.0, 0.8, 3.2, 0.75, 120, 1.83, 0.9, )
 
 
-@register(prefix="260382")
-def diference_of_gaussians_flow_color(img: np.ndarray) -> np.ndarray:
 
 
 
