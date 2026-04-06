@@ -41,22 +41,25 @@ def maria_e_sobel(img: np.ndarray) -> np.ndarray:
 def pixelular(img: np.ndarray) -> np.ndarray:
     # Adiciono padding para que a imagem possa ser quebrada em pixels de 16x16
     # Adiciono 4 pixels na direita e 9 pixels inferiores para totalizar 480x528 pixels
-    foto_pad = np.pad(img, ((0,9),(0,4),(0,0)), mode='edge')
+    h, w, _ = img.shape
+    bloco = h // 10
 
-    # Quebro a imagem em bloquinhos de 16x16, tomando cuidado para pegar as posições corretas de pixels
-    foto_bloco = foto_pad.reshape(30, 16, 33, 16, 3).transpose(0,2,1,3,4)
+    pad_h = (bloco - h % bloco) % bloco
+    pad_w = (bloco - w % bloco) % bloco
 
-    # Tiro a média dos pixels separados em rgb dentro desses bloquinhos
-    means = foto_bloco.mean(axis=(2,3), keepdims=True)
+    img_pad = np.pad(img, ((0,pad_h),(0,pad_w),(0,0)), mode='edge')
 
-    # Expansão da média
-    foto_pxl = np.repeat(np.repeat(means, 16, axis=2), 16, axis=3)
+    H, W, _ = img_pad.shape
 
-    # Volta ao shape original
-    foto_ori = foto_pxl.transpose(0,2,1,3,4).reshape(480,528,3).astype('uint8')
+    img_bloco = img_pad.reshape(H//bloco, bloco, W//bloco, bloco, 3).transpose(0,2,1,3,4)
 
-    foto_crop = foto_ori[0:471:,0:524:,:]
-    return foto_crop
+    means = img_bloco.mean(axis=(2,3), keepdims=True)
+
+    img_pxl = np.repeat(np.repeat(means, bloco, axis=2), bloco, axis=3)
+
+    img_out = img_pxl.transpose(0,2,1,3,4).reshape(H, W, 3)
+
+    return img_out[:h, :w].astype(np.uint8)
 
 @register(prefix="175807")
 def futuro(img: np.ndarray) -> np.ndarray:
