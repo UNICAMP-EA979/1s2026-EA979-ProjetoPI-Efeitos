@@ -52,10 +52,11 @@ def rgb_to_oklab(rgb):
 
 def linear_to_srgb(rgb):
     rgb = np.asarray(rgb)
+    rgb_safe = np.clip(rgb, 0.0, None)
     return np.where(
         rgb <= 0.0031308,
         12.92 * rgb,
-        1.055 * (rgb ** (1/2.4)) - 0.055
+        1.055 * (rgb_safe ** (1/2.4)) - 0.055
     )
 
 def oklab_to_rgb(lab):

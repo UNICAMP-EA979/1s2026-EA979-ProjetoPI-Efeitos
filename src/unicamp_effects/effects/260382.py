@@ -26,7 +26,7 @@ def dithering_red_yellow_black_white(img: np.ndarray) -> np.ndarray:
 
 @register(prefix="260382")
 def edge_detection(img: np.ndarray) -> np.ndarray:
-    return difference_of_gaussians(img, 1.2, 0.8, 3.2, 1.2, 1000, 0.083, 20.0, )
+    return difference_of_gaussians(img, 1.2, 0.8, 3.2, 1.2, 1000, 0.8, 0.95, )
 
 @register(prefix="260382")
 def difference_of_gaussians_flow(img: np.ndarray) -> np.ndarray:
@@ -35,6 +35,11 @@ def difference_of_gaussians_flow(img: np.ndarray) -> np.ndarray:
 @register(prefix="260382")
 def difference_of_gaussians_flow_less(img: np.ndarray) -> np.ndarray:
     return difference_of_gaussians(img, 1.0, 0.8, 3.2, 0.75, 120, 1.83, 0.9, )
+
+
+@register(prefix="260382")
+def diference_of_gaussians_flow_color(img: np.ndarray) -> np.ndarray:
+
 
 
 
