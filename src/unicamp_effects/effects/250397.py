@@ -18,14 +18,12 @@ import scipy.ndimage as scimg
 from unicamp_effects.registry import register
 
 # Funções Gerais (usadas em outras funções)
-@register(prefix="250397")
 def ConversaoCinza(img):
   img_cinza = np.zeros((img.shape[0], img.shape[1]))
   img_cinza[:, :] = 0.3 * img[: , : , 0] + 0.59 * img[: , : , 1] + 0.11 * img[: , : , 2]
 
   return img_cinza
 
-@register(prefix="250397")
 def BlurCinza(img):
   filtro = np.ones((31, 31))
   filtro = filtro/filtro.sum()
@@ -33,7 +31,6 @@ def BlurCinza(img):
 
   return img_blur
 
-@register(prefix="250397")
 def Blur(img):
   filtro = np.ones((31, 31))
   filtro = filtro/filtro.sum()
@@ -54,7 +51,6 @@ def Blur(img):
 
   return img_blur
 
-@register(prefix="250397")
 def DeteccaoBordas(img):
   img_cinza = ConversaoCinza(img)
   img_cinza = img_cinza.astype(float)
@@ -95,7 +91,6 @@ def DeteccaoBordas(img):
 
   return img_sobel
 
-@register(prefix="250397")
 def DeteccaoIntervaloCor(img, min, max):
   img_PIL = pimg.fromarray(img)
   img_red, img_green, img_blue = img_PIL.split()
@@ -126,7 +121,6 @@ def DeteccaoIntervaloCor(img, min, max):
 
   return img_fim
 
-@register(prefix="250397")
 def Pixelizacao(img):
   linhas, colunas = np.indices((img.shape[0], img.shape[1]))
 
@@ -145,6 +139,8 @@ def Pixelizacao(img):
   img_fim[img_bool == False] = img[linhas_final, colunas_final]
 
   return img_fim
+
+# Funções de efeito
 
 """# Efeito Arvore
 O efeito árvore não foi terminado, pois houve problema que a booleana gerada por arvore intervalo deveria ser verdadeiro se qualquer dos valores fosse menor que 255 entre as 3 dimensões do RGB, mas resultaria em, na medida do possível, apenas a borda da árvore e folhas (que por serem pequenas eram praticamente tudo borda) e outros elementos com cores similares mantendo suas cores, enquanto o resto era mudado para branco.
