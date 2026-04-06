@@ -29,3 +29,4 @@ def test_photo_results():
     ra = os.path.basename(paths[0]).split("_")[0]
     assert_valid_ra(ra)
     assert_prefix(paths, ra)
+    
