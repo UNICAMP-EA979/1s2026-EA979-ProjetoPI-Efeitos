@@ -89,7 +89,7 @@ def sobel_filter(img: np.ndarray) -> np.ndarray:
     img_sh = convolve(img, Sh)
     img_sv = convolve(img, Sv)
 
-    sobel = np.sqrt(img_sh**2 + img_sv**2)
-    sobel =  (sobel/sobel.max() *255).astype('uint8')
-    
-    return np.stack([sobel, sobel, sobel], axis = -1)
+    magnitude = np.sqrt(img_sh**2 + img_sv**2)
+    magnitude =  (magnitude/magnitude.max() *255).astype('uint8')
+
+    return np.stack([magnitude, magnitude, magnitude], axis = -1)
