@@ -1,9 +1,13 @@
+import numba
 import numpy as np
+
 from . import colorspaces
 
+# ELTON: adicionei o Numba
 
+
+@numba.njit(cache=True)
 def dithering_pallet(img_raw: np.ndarray, pallet_raw) -> np.ndarray:
-
     """
     :param img: imagem a ser dithering
     :param pallet: palheta de cores a qual a quantização usará
@@ -11,18 +15,18 @@ def dithering_pallet(img_raw: np.ndarray, pallet_raw) -> np.ndarray:
     """''
     img_raw = colorspaces.to_float(img_raw)
     img = colorspaces.rgb_to_oklab(img_raw)
-    del img_raw
-    print(np.max(img), np.min(img))
+    # del img_raw
+    # print(np.max(img), np.min(img))
 
     pallet = []
     for i, color in enumerate(pallet_raw):
         color = colorspaces.to_float(np.array(color))
         color = colorspaces.rgb_to_oklab(color)
         pallet.append(color)
-    print("pallet", pallet)
-    vec_error = np.zeros_like(img[0,0,:])
+    # print("pallet", pallet)
+    vec_error = np.zeros_like(img[0, 0, :])
     for i in range(img.shape[0]):
-        #print(i, flush=True)
+        # print(i, flush=True)
         for j in range(img.shape[1]):
 
             best_color = None
@@ -46,8 +50,6 @@ def dithering_pallet(img_raw: np.ndarray, pallet_raw) -> np.ndarray:
                 img[i, j + 1, :] += 0.4 * vec_error
                 vec_error -= vec_error
     img = colorspaces.oklab_to_rgb(img)
-    print(np.max(img), np.min(img))
+    # print(np.max(img), np.min(img))
     img = np.clip(img, 0.0, 1.0)
     return colorspaces.to_uint8(img)
-
-

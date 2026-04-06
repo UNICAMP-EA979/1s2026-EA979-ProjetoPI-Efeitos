@@ -1,10 +1,28 @@
+import numba
+import numba as nb
 import numpy as np
+from numba.extending import overload
+
+# ELTON: adicionei o Numba
 
 
-def to_float(x: np.ndarray) -> np.ndarray:
+def to_float(x):
     if x.dtype == np.float32 or x.dtype == np.float64:
         return x
     return x.astype(np.float64) / 255.0
+
+
+@overload(to_float)
+def ol_to_float(x):  # ELTON: Adicionei para suportar Numba
+    if isinstance(x.dtype, nb.types.Float):
+        def impl(x):
+            return x
+        return impl
+    else:
+        def impl(x):
+            return x.astype(np.float64) / 255.0
+        return impl
+
 
 def to_uint8(x: np.ndarray) -> np.ndarray:
     if x.dtype == np.uint8:
@@ -12,6 +30,19 @@ def to_uint8(x: np.ndarray) -> np.ndarray:
     return np.round(255.0 * x).astype(np.uint8)
 
 
+@overload(to_uint8)
+def ol_to_uint8(x):  # ELTON: Adicionei para suportar Numba
+    if x.dtype == nb.uint8:
+        def impl(x):
+            return x
+        return impl
+    else:
+        def impl(x):
+            return np.round(255.0 * x).astype(np.uint8)
+        return impl
+
+
+@numba.njit(cache=True)
 def srgb_to_linear(rgb):
     rgb = np.asarray(rgb)
     return np.where(
@@ -19,10 +50,13 @@ def srgb_to_linear(rgb):
         rgb / 12.92,
         ((rgb + 0.055) / 1.055) ** 2.4
     )
-#Transforma RBG para OKLAB
-#OKlab é um espaço perceptualmente uniforme. Facilita tarefas como conversão para grayscale e
-#Ver a distância entre duas cores.
+
+
+@numba.njit(cache=True)
 def rgb_to_oklab(rgb):
+    # Transforma RBG para OKLAB
+    # OKlab é um espaço perceptualmente uniforme. Facilita tarefas como conversão para grayscale e
+    # Ver a distância entre duas cores.
     """
     rgb: shape (..., 3), values in [0,1]
     returns: same shape (..., 3) in Oklab
@@ -34,9 +68,12 @@ def rgb_to_oklab(rgb):
     rgb_lin = srgb_to_linear(rgb)
 
     # Step 2: linear RGB -> LMS
-    l = 0.4122214708 * rgb_lin[..., 0] + 0.5363325363 * rgb_lin[..., 1] + 0.0514459929 * rgb_lin[..., 2]
-    m = 0.2119034982 * rgb_lin[..., 0] + 0.6806995451 * rgb_lin[..., 1] + 0.1073969566 * rgb_lin[..., 2]
-    s = 0.0883024619 * rgb_lin[..., 0] + 0.2817188376 * rgb_lin[..., 1] + 0.6299787005 * rgb_lin[..., 2]
+    l = 0.4122214708 * rgb_lin[..., 0] + 0.5363325363 * \
+        rgb_lin[..., 1] + 0.0514459929 * rgb_lin[..., 2]
+    m = 0.2119034982 * rgb_lin[..., 0] + 0.6806995451 * \
+        rgb_lin[..., 1] + 0.1073969566 * rgb_lin[..., 2]
+    s = 0.0883024619 * rgb_lin[..., 0] + 0.2817188376 * \
+        rgb_lin[..., 1] + 0.6299787005 * rgb_lin[..., 2]
 
     # Step 3: cube root
     l_ = np.cbrt(l)
@@ -48,8 +85,15 @@ def rgb_to_oklab(rgb):
     a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_
     b = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
 
-    return np.stack([L, a, b], axis=-1)
+    result = np.empty_like(rgb_lin)
+    result[..., 0] = L
+    result[..., 1] = a
+    result[..., 2] = b
 
+    return result  # np.stack((L, a, b), axis=-1)
+
+
+@numba.njit(cache=True)
 def linear_to_srgb(rgb):
     rgb = np.asarray(rgb)
     rgb_safe = np.clip(rgb, 0.0, None)
@@ -59,6 +103,8 @@ def linear_to_srgb(rgb):
         1.055 * (rgb_safe ** (1/2.4)) - 0.055
     )
 
+
+@numba.njit(cache=True)
 def oklab_to_rgb(lab):
     """
     lab: shape (..., 3)
@@ -83,10 +129,13 @@ def oklab_to_rgb(lab):
     g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
     b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
 
-    rgb_lin = np.stack([r, g, b], axis=-1)
+    # rgb_lin = np.stack([r, g, b], axis=-1)
+    rgb_lin = np.empty_like(lab)
+    rgb_lin[..., 0] = r
+    rgb_lin[..., 1] = g
+    rgb_lin[..., 2] = b
 
     # Step 4: linear RGB -> sRGB
     rgb = linear_to_srgb(rgb_lin)
 
     return rgb
-

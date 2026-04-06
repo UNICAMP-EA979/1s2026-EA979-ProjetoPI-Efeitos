@@ -3,7 +3,6 @@ import os
 import cv2 as cv
 import numpy as np
 import tqdm
-from PIL import Image, ImageOps
 
 from .utils import get_all_imgs_in_dir, get_path_ra, load_photo
 
