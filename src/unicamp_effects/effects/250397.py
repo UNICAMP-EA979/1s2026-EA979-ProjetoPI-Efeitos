@@ -10,39 +10,12 @@ Original file is located at
 
 # Bibliotecas
 import numpy as np
-from google.colab import files
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import PIL.Image as pimg
 import PIL.ImageOps as pimgops
 import scipy.ndimage as scimg
 from unicamp_effects.registry import register
-
-# Download das imagens
-arvore = mpimg.imread('Arvore.jpg')
-arvore = np.rot90(arvore, k=-1)
-
-bicicleta = mpimg.imread('Bicicleta.jpg')
-bicicleta = np.rot90(bicicleta, k=-1)
-
-depth = mpimg.imread('Depth.jpg')
-depth = np.rot90(depth, k=-1)
-
-# Plotagem
-fig, axs = plt.subplots(1, 3, figsize = (12, 4))
-plt.tight_layout()
-
-plt.subplot(131)
-plt.imshow(arvore, cmap = 'gray')
-plt.title('Arvore')
-
-plt.subplot(132)
-plt.imshow(bicicleta, cmap = 'gray')
-plt.title('Bicicleta')
-
-plt.subplot(133)
-plt.imshow(depth, cmap = 'gray')
-plt.title('Depth')
 
 # Funções Gerais (usadas em outras funções)
 @register(prefix="250397")
@@ -146,7 +119,7 @@ def DeteccaoIntervaloCor(img, min, max):
   img_bool = np.stack([img_red_bool, img_green_bool, img_blue_bool])
   img_bool = img_bool.transpose(1, 2, 0)
 
-  white = np.ones((arvore.shape[0], arvore.shape[1], arvore.shape[2]), dtype = np.uint8)
+  white = np.ones((img.shape[0], img.shape[1], img.shape[2]), dtype = np.uint8)
   white = white * 255
 
   img_fim = np.where(img_bool, img, white)
@@ -191,7 +164,7 @@ def Arvore(arvore_inicial):
 
   arvore_bool = arvore_aux_1 & arvore_aux_2
 
-  white = np.ones((arvore.shape[0], arvore.shape[1], arvore.shape[2]), dtype = np.uint8)
+  white = np.ones((arvore_inicial.shape[0], arvore_inicial.shape[1], arvore_inicial.shape[2]), dtype = np.uint8)
   white = white * 255
 
   arvore_fim = np.where(arvore_bool, arvore_inicial, white)
@@ -218,8 +191,6 @@ def Arvore(arvore_inicial):
 
   return arvore_fim
 
-arvore_fim = Arvore(arvore)
-
 """# Efeito Bicicleta
 O efeito realiza a pixelização da imagem.
 """
@@ -242,8 +213,6 @@ def Bicicleta(bicicleta_inicial):
 
   return bicicleta_fim
 
-bicicleta_fim = Bicicleta(bicicleta)
-
 """# Efeito Depth
 O efeito realizado teve sua proposta levemente alterado para realizar o blur das bordas detectadas. Ele ocorre ao detectar bordas e realizar o blur deleas que coincidem com a maior parte do ambiente além da varanda, visto que as diversas árvores geram diversas bordas.
 """
@@ -255,7 +224,7 @@ def Depth(depth_inicial):
   depth_blur = Blur(depth_inicial)
 
   # Auxiliar para realizar blur
-  depth_aux = depth_bordas <= 50
+  depth_aux = depth_bordas <= 100
   depth_aux = np.array([depth_aux, depth_aux, depth_aux])
   depth_aux = depth_aux.transpose(1, 2, 0)
 
@@ -283,16 +252,3 @@ def Depth(depth_inicial):
   plt.title('Final')
 
   return depth_fim
-
-depth_fim = Depth(depth)
-
-# Download das imagens finais
-import cv2
-
-cv2.imwrite('arvore_fim.jpg', arvore_fim)
-cv2.imwrite('bicicleta_fim.jpg', bicicleta_fim)
-cv2.imwrite('depth_fim.jpg', depth_fim)
-
-files.download('arvore_fim.jpg')
-files.download('bicicleta_fim.jpg')
-files.download('depth_fim.jpg')
