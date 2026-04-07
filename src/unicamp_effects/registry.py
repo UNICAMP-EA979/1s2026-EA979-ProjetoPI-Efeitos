@@ -9,11 +9,10 @@ _effect_registry: dict[str, ImageEffect] = {}
 def register(prefix: str | None = None) -> Callable[[ImageEffect], ImageEffect]:
 
     def register_inner(func: ImageEffect) -> ImageEffect:
-        inner_prefix = prefix
-        if inner_prefix is None:
-            inner_prefix = ""
-
-        name = f"{inner_prefix}_{func.__qualname__}"
+        if prefix is None:
+            name = func.__qualname__
+        else:
+            name = f"{prefix}_{func.__qualname__}"
 
         if name in _effect_registry:
             raise RuntimeError(f"There is already an effect named {name}")

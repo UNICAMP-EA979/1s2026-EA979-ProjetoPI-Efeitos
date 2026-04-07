@@ -2,7 +2,7 @@ import argparse
 import os
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from unicamp_effects.registry import get_effect
 
@@ -29,7 +29,8 @@ def main():
     effect_name: str = args.effect_name
     output_path: str = args.output_path
 
-    img = np.array(Image.open(input_image))
+    img_pil = ImageOps.exif_transpose(Image.open(input_image)).convert("RGB")
+    img = np.array(img_pil)
 
     effect = get_effect(effect_name)
 
